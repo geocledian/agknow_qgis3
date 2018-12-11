@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/plugins/Agknow" >
+        <file>agknow_project_logo.png</file>
+        <file>agknow_project_logo.jpg</file>
+        <file>geocledian_logo_sm.png</file>
+    </qresource>
+</RCC>
