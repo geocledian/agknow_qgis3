@@ -3,21 +3,22 @@
 name=agknow for QGIS
 qgisMinimumVersion=3.4
 description=Plugin for using the ag|knowledge REST API from <a href="https://geocledian.com">geo|cledian</a>
-version=0.7
+version=0.7.1
 author=geo|cledian.com
 email=jsommer@geocledian.com
 
-about=This plugin allows the usage of the remote sensing API ag|knowledge from geo|cledian.com. The API provides a field monitoring service that allows to monitor any agricultural field worldwide with a variety of vegetation indexes, crop parameters, times series analysis and comparison features based on satellite data.<p>Features of the plugin include the download and analysis of time series of visible and vegetation indexes rasters of registered fields. The data is based on Landsat-8 and Sentinel-2 currently. See <a href="https://sites.google.com/site/geocledian">https://sites.google.com/site/geocledian</a> for a detailed product overwiew.<p>Please note that you will need a registered API key from geocledian.com to use this plugin for your area of interest. The plugin is delivered with a demo key that allows to access some demo parcels around the world for evaluation purposes.
+about=This plugin allows the usage of the remote sensing API ag|knowledge from geo|cledian.com. The API provides a field monitoring service that allows to monitor any agricultural field worldwide with a variety of vegetation indexes, crop parameters, times series analysis and comparison features based on satellite data.<p>Features of the plugin include the download and analysis of time series of visible and vegetation indexes rasters of registered fields. The data is based on Landsat-8 and Sentinel-2 currently. See <a href="https://sites.google.com/site/geocledian">https://sites.google.com/site/geocledian</a> for a detailed product overview.<p>Please note that you will need a registered API key from geocledian.com to use this plugin for your area of interest. The plugin is delivered with a demo key that allows to access some demo parcels around the world for evaluation purposes.
 
 tracker=https://github.com/sommergis/agknow_qgis3/issues
 repository=https://github.com/sommergis/agknow_qgis3
 
-changelog=0.7 GUI Improvements
+changelog=0.7.1 API Key as password input, tags added
+	  0.7 GUI Improvements
           0.5 First public release candidate
           0.1 Initial release
 
 # Tags are comma separated with spaces allowed
-tags=agriculture, smart farming, ecology, field, landsat, sentinel, remote sensing, time, webservice, satellite data
+tags=agriculture, smart farming, ecology, field, landsat, sentinel, remote sensing, time, webservice, satellite data, satellite
 
 homepage=https://www.geocledian.com
 category=Web
