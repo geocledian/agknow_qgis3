@@ -24,14 +24,10 @@ Please note that you will need a registered API key from geocledian.com to use t
 - anything happens in memory (vector and image data)
 
 ## Installation
-
 ### Linux
 clone git repo to ~/.local/share/QGIS/QGIS3/profiles/default/python/plugins
-
 ### Windows
 clone git repo to %APPDATA%\QGIS\QGIS3\profiles\default\python\plugins, i.e.
 C:\Users\[USER]\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins
-
-
 
 

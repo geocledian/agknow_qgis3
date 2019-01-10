@@ -207,6 +207,7 @@ class Agknow(object):
         # custom events
         self.main_dockwidget.imagesReloaded.disconnect(self.onImagesReloaded)
         self.main_dockwidget.dataSourceChanged.disconnect(self.onDatasourceChanged)
+        self.main_dockwidget.parcelIdChanged.disconnect(self.onParcelIdChanged)
         self.timeslider_dockwidget.productChanged.disconnect(self.onProductChanged)
 
         # closing events

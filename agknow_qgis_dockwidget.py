@@ -26,12 +26,13 @@ from __future__ import absolute_import
 from builtins import next
 from builtins import str
 from qgis.PyQt import QtWidgets, uic
-from qgis.PyQt.QtCore import pyqtSignal, pyqtSlot, QVariant, Qt, QThread
+from qgis.PyQt.QtCore import pyqtSignal, pyqtSlot, QVariant, Qt, QThread, QDate
 from qgis.PyQt.QtWidgets import QApplication
 import qgis.utils
 
 from qgis.core import QgsRasterLayer, QgsPoint, QgsVectorLayer, QgsGeometry,  \
-    QgsFields, QgsField, QgsFeatureRequest, QgsExpression, QgsProject, Qgis, QgsMessageLog, QgsLayerTreeLayer
+    QgsFields, QgsField, QgsFeatureRequest, QgsExpression, QgsProject, Qgis, QgsMessageLog, QgsLayerTreeLayer, \
+     QgsMapLayerProxyModel
 
 from .agknow_worker import *
 
@@ -40,8 +41,7 @@ from . import agknow_utils
 import json
 import os
 
-import gdal
-from uuid import uuid4
+import datetime
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'agknow_qgis_dockwidget_base.ui'))
@@ -66,16 +66,17 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         # #widgets-and-dialogs-with-auto-connect
         self.setupUi(self)
 
-        # GUI Events
-        self.btnConnect.clicked.connect(self.btnConnect_clicked)
-        self.cbResultsIDName.currentIndexChanged.connect(self.cbResultsIDName_currentIndexChanged)
-        self.btnRefresh.clicked.connect(self.btnRefresh_clicked)
 
         # lambda keyword allows the button itself to be passed
         #https://www.tutorialspoint.com/pyqt/pyqt_qradiobutton_widget.htm
         self.rdBtnDataSourceLandsat.toggled.connect(lambda: self.rdBtnDataSourceState_toggled(self.rdBtnDataSourceLandsat))
         self.rdBtnDataSourceSentinel.toggled.connect(lambda: self.rdBtnDataSourceState_toggled(self.rdBtnDataSourceSentinel))
         self.rdBtnDataSourceAll.toggled.connect(lambda: self.rdBtnDataSourceState_toggled(self.rdBtnDataSourceAll))
+
+        self.cbPolygonLayer.setFilters(QgsMapLayerProxyModel.PolygonLayer)
+
+        # Hide "Please select a feature from the chosen polygon layer!" text
+        self.lblRegister.setVisible(False)
 
         self.iface = qgis.utils.iface
         self.canvas = self.iface.mapCanvas()
@@ -98,6 +99,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             pass
 
         self.parcelLyr = self.init_parcel_lyr()
+        self.registerLyr = None
+
         self.parcel_ids = []
 
         self.init_image_lyr()
@@ -111,10 +114,30 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.product = "vitality"
         self.data_source = "sentinel2"
 
+        self.register_data = { u"crop": "",
+                               u"name": "",
+                               u"planting": "",
+                               u"harvest": "",
+                               u"entity": "",
+                               u"geometry": ""
+                            }
+
+        self.parcel_id_to_set = None
 
         # {raster_group_id: [raster data in json format]}
         # raster_group_id = "{0}_{1}_{2}_{3}".format(parcel_id, self.product_id, self.data_source, self.img_format)
         self.rasters = {}
+
+        # GUI Events
+        self.btnConnect.clicked.connect(self.btnConnect_clicked)
+        self.cbResultsIDName.currentIndexChanged.connect(self.cbResultsIDName_currentIndexChanged)
+        self.btnRefresh.clicked.connect(self.btnRefresh_clicked)
+        self.btnRegister.clicked.connect(self.btnRegister_clicked)
+        self.cbPolygonLayer.currentIndexChanged.connect(self.cbPolygonLayer_currentIndexChanged)
+
+        # reset register data
+        self.clear_register_data()
+
 
     def get_current_project_epsg(self):
         """
@@ -154,6 +177,110 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         self.handle_product_change(product)
 
+
+    def map_known_data_model(self, feature):
+        """
+         Maps the feature's data to the agknowledge REST data model
+        :param feature: QgsFeature
+        """
+
+        # try to map values from known fields to the internal data model
+        try:
+            self.tbRegisterCrop.setText(feature["crop"])
+        except KeyError:
+            self.tbRegisterCrop.setText("")
+        except:
+            QgsMessageLog.logMessage("Error mapping data from register to internal layer!", 'agknow',
+                                     Qgis.Warning)
+
+        try:
+            self.tbRegisterName.setText(feature["name"])
+        except KeyError:
+            self.tbRegisterName.setText("")
+        except:
+            QgsMessageLog.logMessage("Error mapping data from register to internal layer!", 'agknow',
+                                     Qgis.Warning)
+
+        # test the more unlikely first - may be overriden by the following field
+        try:
+            if feature["seeding"] is not None:
+                # for text field with date in it
+                if isinstance(feature["seeding"], basestring):
+                    # for text field (QString) in ISO Format (YYYY-MM-DD)
+                    d = QDate.fromString(feature["seeding"], Qt.ISODate)
+                elif isinstance(feature["seeding"], QDate):
+                    # for date field (QDate)
+                    d = feature["seeding"]
+
+                self.tbRegisterSeeding.setDate(d)
+
+        except KeyError:
+            self.tbRegisterSeeding.setDate(QDate.fromString("{0}-01-01".format(datetime.datetime.now().year), Qt.ISODate))
+        except:
+            QgsMessageLog.logMessage("Error mapping data from register to internal layer!", 'agknow',
+					Qgis.Warning)
+        try:
+            if feature["planting"] is not None:
+                # for text field with date in it
+                if isinstance(feature["planting"], basestring):
+                    # for text field (QString) in ISO Format (YYYY-MM-DD)
+                    d = QDate.fromString(feature["planting"], Qt.ISODate)
+                elif isinstance(feature["planting"], QDate):
+                    # for date field (QDate)
+                    d = feature["planting"]
+
+                self.tbRegisterSeeding.setDate(d)
+
+        except KeyError:
+            self.tbRegisterSeeding.setDate(QDate.fromString("{0}-01-01".format(datetime.datetime.now().year), Qt.ISODate))
+        except:
+            QgsMessageLog.logMessage("Error mapping data from register to internal layer!", 'agknow',
+                                     Qgis.Warning)
+
+        # test the more unlikely first - may be overriden by the following field
+        try:
+            if feature["cutting"] is not None:
+                # for text field with date in it
+                if isinstance(feature["cutting"], basestring):
+                    # for text field (QString) in ISO Format (YYYY-MM-DD)
+                    d = QDate.fromString(feature["cutting"], Qt.ISODate)
+                elif isinstance(feature["cutting"], QDate):
+                    # for date field (QDate)
+                    d = feature["cutting"]
+
+                self.tbRegisterHarvest.setDate(d)
+
+        except KeyError:
+            self.tbRegisterHarvest.setDate(QDate.fromString("{0}-12-31".format(datetime.datetime.now().year), Qt.ISODate))
+        except:
+            QgsMessageLog.logMessage("Error mapping data from register to internal layer!", 'agknow',
+                                     Qgis.Warning)
+
+        try:
+            if feature["harvest"] is not None:
+                # for text field with date in it
+                if isinstance(feature["harvest"], basestring):
+                    # for text field (QString) in ISO Format (YYYY-MM-DD)
+                    d = QDate.fromString(feature["harvest"], Qt.ISODate)
+                elif isinstance(feature["harvest"], QDate):
+                    # for date field (QDate)
+                    d = feature["harvest"]
+
+                self.tbRegisterHarvest.setDate(d)
+
+        except KeyError:
+            self.tbRegisterHarvest.setDate(QDate.fromString("{0}-12-31".format(datetime.datetime.now().year), Qt.ISODate))
+        except:
+            QgsMessageLog.logMessage("Error mapping data from register to internal layer!", 'agknow',
+                                     Qgis.Warning)
+        try:
+            self.tbRegisterEntity.setText(feature["entity"])
+        except KeyError:
+            self.tbRegisterEntity.setText("")
+        except:
+            QgsMessageLog.logMessage("Error mapping data from register to internal layer!", 'agknow',
+                                     Qgis.Warning)
+
     def handle_product_change(self, product):
         """
          Handles the change of the product.
@@ -183,7 +310,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         """
         return self.parcelLyr
 
-    def init_progressBar(self, min_value=0, max_value=100, value=0):
+    def init_progressBar(self, min_value=0, max_value=100):
         """
          Initializes the progress bar within with the given min and max value.
 
@@ -242,6 +369,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         pr.addAttributes(fields)
         parcelLyr.updateFields()  # tell the vector layer to fetch changes from the provider
 
+        self.iface.setActiveLayer(parcelLyr)
+
         return parcelLyr
 
     def remove_parcel_lyr(self):
@@ -277,59 +406,57 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         # Reset connection
         if self.settings["connected"]:
+            self.disconnect()
+        else:
+            self.connect()
 
-            # clear combobox, lyr, parcel_ids
-            self.cbResultsIDName.clear()
-
-            self.settings["connected"] = False
-
-            self.deactivate_connecting_state()
-
-            self.show_disconnected_state()
-
-            return
+    def disconnect(self):
+        """
+         Disconnects from agknowledge REST API.
+        """
 
         # clear combobox, lyr, parcel_ids
         self.cbResultsIDName.clear()
+        self.settings["connected"] = False
+        self.deactivate_connecting_state()
+        self.show_disconnected_state()
 
+    def connect(self):
+        """
+         Connect to the agknowledge REST API.
+        """
+
+        # clear combobox, lyr, parcel_ids
+        self.cbResultsIDName.clear()
         try:
             self.remove_parcel_lyr()
 
         except Exception as e:
-            QgsMessageLog.logMessage("Error removing all features from parcel layer!", 'agknow',
+            QgsMessageLog.logMessage("Error removing parcel layer!", 'agknow',
                                      Qgis.Warning)
-        self.activate_connecting_state()
 
+        self.activate_connecting_state()
         # wait cursor
         QApplication.setOverrideCursor(Qt.WaitCursor)
 
-
-
         self.parcelLyr = self.init_parcel_lyr()
-
         self.parcel_ids = []
         self.reset_toc()
         self.rasters = {}
-
         self.read_agknow_settings()
 
         api_key = self.tbAPIKey.text()
         host_url = self.tbHostURL.text()
-
         base_url = host_url + "/agknow/api/v3"
+
         # limited to 1000 at the moment
         # TODO: paging
         limit = 1000
         params = "/parcels/?key={0}&limit={1}".format(api_key, limit)
-
         # async with worker
-
-        # set up progressbar
-        # TODO busy indicator does not work properly with PyQt5
+        # set up progress bar
         self.init_progressBar(min_value=0, max_value=0)
-
         kwargs = {"base_url": base_url, "params": params, "ssl_verify": True}
-
         self.startWorker(_runMethod="http_get",
                          _finishedEvtMethod="get_parcel_base_data_finished",
                          _errorEvtMethod="get_parcel_base_data_error",
@@ -356,6 +483,87 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         if parcel_group is not None:
             self.toggle_data_sources(parcel_group)
 
+
+    def cbPolygonLayer_currentIndexChanged(self):
+        """
+         Handles the currentIndexChanged event on cbPolygonLayer (i.e. when the user chooses another layer from
+         the combobox.
+        """
+        print("cbPolygonLayer_currentIndexChanged()")
+
+        lyr = self.get_current_register_layer()
+
+        if lyr is not None:
+
+            self.iface.mainWindow().statusBar().showMessage(self.lblRegister.text())
+            self.lblRegister.setVisible(True)
+
+            #print(lyr.name())
+            self.registerLyr = lyr
+
+            # also activate layer in TOC on changed section
+            self.iface.setActiveLayer(lyr)
+
+            #connect to selectedFeatures event
+            self.registerLyr.selectionChanged.connect(self.registerLyr_selectionChanged)
+
+    def registerLyr_selectionChanged(self):
+        """
+         Handles the selectionChanged event of the registerLayer.
+        """
+
+        # only if user wants to register
+        if self.chxBoxRegister.isChecked():
+            if len(self.registerLyr.selectedFeatures()) > 0:
+                if len(self.registerLyr.selectedFeatures()) == 1:
+                    self.iface.mainWindow().statusBar().clearMessage()
+                    self.lblRegister.setVisible(False)
+                    self.btnRegister.setEnabled(True)
+                    self.map_known_data_model(self.registerLyr.selectedFeatures()[0])
+                else:
+                    self.lblRegister.setVisible(True)
+                    self.btnRegister.setEnabled(False)
+            else:
+                self.iface.mainWindow().statusBar().showMessage(self.lblRegister.text())
+                # clear attribute data
+                self.clear_register_data()
+                self.lblRegister.setVisible(True)
+                self.btnRegister.setEnabled(False)
+
+    def clear_register_data(self):
+        """
+         Clears all data from the GUI elements and internal storage of register_data.
+        """
+        self.register_data.clear()
+        self.tbRegisterName.setText("")
+        self.tbRegisterCrop.setText("")
+        self.tbRegisterEntity.setText("")
+        # Set default values for the current year as dates
+        current_year = datetime.datetime.now().year
+        self.tbRegisterSeeding.setDate(QDate.fromString("{0}-01-01".format(current_year), Qt.ISODate))
+        self.tbRegisterHarvest.setDate(QDate.fromString("{0}-12-31".format(current_year), Qt.ISODate))
+
+    def register_feature(self, register_data):
+        """
+         Register the given QgsFeature in the agknow API.
+         :param register_data: feature with geometry and attributes to register (QgsFeature)
+        """
+        print("register_feature()")
+
+        # async registering
+        api_key = self.tbAPIKey.text()
+        host_url = self.tbHostURL.text()
+        base_url = host_url + "/agknow/api/v3"
+        params = "/parcels/?key=" + api_key
+
+        kwargs = {"base_url": base_url, "params": params, "feature_to_register": register_data,
+                  "ssl_verify": True, "api_key": api_key, "geometry_epsg": self.get_layer_epsg(self.get_current_register_layer())}
+
+        self.startWorker(_runMethod="register_feature",
+                         _finishedEvtMethod="register_feature_finished",
+                         _errorEvtMethod="register_feature_error",
+                         **kwargs)
+
     def btnRefresh_clicked(self):
         """
          Handles the click event on btnRefresh.
@@ -364,6 +572,46 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.activate_connecting_state()
 
         self.refresh_data()
+
+    def btnRegister_clicked(self):
+        """
+         Handles the click event on btnRegister.
+        """
+        self.activate_connecting_state()
+
+        features = []
+        # get the selected features
+        if self.registerLyr is not None:
+            if len(self.registerLyr.selectedFeatures()) > 0:
+                if len(self.registerLyr.selectedFeatures()) == 1:
+
+                    # set attribute data again if changed through user
+                    self.register_data[u"crop"] = self.tbRegisterCrop.text()
+                    self.register_data[u"name"] = self.tbRegisterName.text()
+
+                    # QDate to string conversion Qt.ISODate -> YYYY-MM-DD
+                    self.register_data[u"planting"] = self.tbRegisterSeeding.date().toString(Qt.ISODate)
+                    self.register_data[u"harvest"] = self.tbRegisterHarvest.date().toString(Qt.ISODate)
+
+                    self.register_data[u"entity"] = self.tbRegisterEntity.text()
+                    # but take the geometry from the selected feature
+                    # DON't: self.registerLyr.selectedFeatures()[0].geometry().asWkt() --> segmentation fault!
+                    # Do it this way
+                    feat = self.registerLyr.selectedFeatures()[0]
+                    self.register_data[u"geometry"] = feat.geometry().asWkt()
+
+                    self.register_feature(self.register_data)
+
+                elif len(self.registerLyr.selectedFeatures()) > 1:
+                    QgsMessageLog.logMessage("More than one feature selected - cannot proceed!", "agknow", Qgis.Critical)
+
+        self.deactivate_connecting_state()
+
+    def get_current_register_layer(self):
+        """
+         Returns the current selected layer (QgsMapLayer) from which feature may be registered in the API.
+        """
+        return self.cbPolygonLayer.currentLayer()
 
     def refresh_data(self):
         """
@@ -472,6 +720,21 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             parcel_id = int(self.cbResultsIDName.currentText().split(" - ")[0])
             return parcel_id
 
+    def set_current_parcel(self, parcel_id):
+        """
+         Sets the current active parcel for the given ID.
+        :param parcel_id: parcel's ID (integer)
+        """
+        print("set_current_parcel({0})".format(parcel_id))
+
+        if parcel_id is not None:
+            for i in range(self.cbResultsIDName.count()):
+                cur_pid = int(self.cbResultsIDName.itemText(i).split(" - ")[0])
+                if cur_pid == parcel_id:
+                    self.cbResultsIDName.setCurrentIndex(i)
+
+                    self.parcel_id_to_set = None # reset
+
     def update_parcel_data(self, api_key, base_url, parcel_id):
         """
          Updates the data (detail attribute data) for the given parcel id from the API if necessary
@@ -561,7 +824,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
                 # in checks for keys in dictionary
                 if raster_group_id not in self.rasters:
-
+                    print("raster_group_id: {0} not found - downloading from server..".format(raster_group_id))
                     QgsMessageLog.logMessage("raster_group_id: {0} not found - downloading from server..".format(raster_group_id), "agknow",
                                              Qgis.Info)
 
@@ -583,6 +846,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 base_url = host_url + "/agknow/api/v3"
 
                 self.init_progressBar()
+                #print("update_parcel_images() - return")
+                #return
 
                 kwargs = {"base_url": base_url, "product_id": self.product, "parcel_ids": parcel_ids,
                           "data_source": self.data_source, "ssl_verify": True, "api_key": api_key,
@@ -831,7 +1096,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         try:
             feature = next(self.parcelLyr.getFeatures(request))
         except:
-            QgsMessageLog.logMessage("Feature {0} not found".format(parcel_id),  "agknow", QgsMessageLog.WARNING)
+            QgsMessageLog.logMessage("Feature {0} not found".format(parcel_id),  "agknow", Qgis.Warning)
             return
 
         # TODO slight buffer for nicer display
@@ -958,8 +1223,13 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
             self.btnRefresh.setEnabled(True)
 
-            # trigger the change event manually now to download the detail data and images per parcel
-            self.cbResultsIDName_currentIndexChanged()
+            if self.parcel_id_to_set is not None:
+                # trigger the change event manually now to download the detail data and images per parcel
+                # calls self.cbResultsIDName_currentIndexChanged() through selecting the given parcel_id
+                self.set_current_parcel(self.parcel_id_to_set)
+            else:
+                # trigger the change event manually now to download the detail data and images per parcel
+                self.cbResultsIDName_currentIndexChanged()
 
         else:  # download all details of the parcels and populate the combobox afterwards
 
@@ -980,8 +1250,6 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             parcel_ids = []
             for item in result["content"]:
                 parcel_ids.append(item["parcel_id"])
-
-            # print("{0} parcels in parcel_ids".format(len(self.parcel_ids)))
 
             # async with worker
             kwargs = {"base_url": base_url, "ssl_verify": False, "parcel_ids": parcel_ids,
@@ -1086,6 +1354,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.grBoxResults.setEnabled(True)
         self.btnConnect.setEnabled(True)
         self.btnRefresh.setEnabled(self.settings["connected"])
+        self.grBoxLayerSettings.setEnabled(self.settings["connected"])
 
     def activate_connecting_state(self):
         """
@@ -1098,6 +1367,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.grBoxResults.setEnabled(False)
         self.btnConnect.setEnabled(False)
         self.btnRefresh.setEnabled(False)
+        self.grBoxLayerSettings.setEnabled(False)
 
     @pyqtSlot(str)
     def get_parcel_base_data_error(self, ret):
@@ -1151,10 +1421,9 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                                                     level=Qgis.Warning, duration=2)
                 return
 
-            # populate cbResultsIDName
-            # this will also trigger the cbResultsIDName_currentIndexChanged event
-            # in which the download of the images happen if "download image" is active
-            # and data is not already existent
+            # IMPORTANT - deactivate the changed event for filling the combobox
+            # because otherwise there are interfering threads (currentIndexChanged Event will also
+            # call update_parcel_images(), but we call it here explicitely
 
             # disconnect the event listener temporary
             self.cbResultsIDName.currentIndexChanged.disconnect(self.cbResultsIDName_currentIndexChanged)
@@ -1191,8 +1460,13 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                     self.update_parcel_images(api_key, base_url, self.parcel_ids)
 
                 else:
-                    # zoom to first parcel
-                    self.zoom_to_parcel(self.get_current_parcel_id())
+                    if self.parcel_id_to_set is not None:
+                        # trigger the change event manually now to download the detail data and images per parcel
+                        # calls self.cbResultsIDName_currentIndexChanged() through selecting the given parcel_id
+                        self.set_current_parcel(self.parcel_id_to_set)
+                    else:
+                        # zoom to first parcel
+                        self.zoom_to_parcel(self.get_current_parcel_id())
 
                     self.deactivate_connecting_state()
 
@@ -1291,6 +1565,11 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 # notify change on slot
                 self.imagesReloaded.emit(rasters)
 
+            if self.parcel_id_to_set is not None:
+                # trigger the change event manually now to download the detail data and images per parcel
+                # calls self.cbResultsIDName_currentIndexChanged() through selecting the given parcel_id
+                self.set_current_parcel(self.parcel_id_to_set)
+
             # zoom to first parcel
             print("get_images_finished() - zooming to parcel..")
             self.zoom_to_parcel(self.get_current_parcel_id())
@@ -1303,7 +1582,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         self.deactivate_connecting_state()
         self.btnRefresh.setEnabled(self.settings["connected"])
-
+        self.grBoxLayerSettings.setEnabled(self.settings["connected"])
 
     @pyqtSlot(str)
     def get_images_error(self, ret):
@@ -1318,7 +1597,6 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.cleanup_threading()
 
         if ret is not None:
-            # print(ret)
             # notify the user that something went wrong
             self.iface.messageBar().pushMessage('Something went wrong! See the message log for more information.',
                                                 level=Qgis.Critical,
@@ -1332,3 +1610,97 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         self.deactivate_connecting_state()
         self.btnRefresh.setEnabled(self.settings["connected"])
+        self.grBoxLayerSettings.setEnabled(self.settings["connected"])
+
+    @pyqtSlot(object)
+    def register_feature_finished(self, ret):
+        """
+         Event handler for the error event of the register_feature_finished worker.
+
+        :param ret: JSON string from the agknow API
+        """
+        print("register_feature_finished()")
+
+        # important! cleanup first before starting another thread
+        self.cleanup_threading()
+
+        if ret is not None:
+
+            # Success:
+            # {"errors": "", "messages": {"status": "Successfully created parcel"}, "id": 19}
+            # Error on wrong geometry
+            # {u'errors': u'Could not read geometry from WKT', u'id': None}
+
+            ret_dict = json.loads(ret)
+
+            if len(ret_dict["errors"]) == 0:
+
+                status = ret_dict["messages"]["status"]
+                new_id = ret_dict["id"]
+                self.iface.messageBar().clearWidgets()
+                self.iface.messageBar().pushMessage('Successfully registered feature with ID {0}'.format(new_id),
+                                                level=Qgis.Success,
+                                                duration=1.5)
+
+                self.iface.mainWindow().statusBar().showMessage("{0}: {1}".format(status, new_id))
+
+                QgsMessageLog.logMessage("register_feature_finished(): {0}".format("{0}: {1}".format(status, new_id)),
+                                         "agknow",
+                                         Qgis.Info)
+
+                # TODO better design - don't call the whole chain for "all-at-once" it will update all data
+                #  - only refresh the combobox with base data
+                #  - only refresh the new parcel with image data
+
+                # so set the mode back to one-by-one when registering
+                # maybe changed only with disconnect / connect again
+                self.rdBtnParcelDownloadOne.setChecked(True)
+                self.settings["parcel_download_mode"] = "one-by-one"
+
+                if self.settings["parcel_download_mode"] == "one-by-one":
+                    # refresh parcels and select the new one?
+                    self.connect()
+
+                    # set the new id here because the self.connect() method calls a async worker chain
+                    # and it would be too much work to pass the parcel id through the whole chain.
+                    self.parcel_id_to_set = new_id
+
+            else:
+                status = ret_dict["errors"]
+                self.iface.messageBar().clearWidgets()
+                self.iface.messageBar().pushMessage('Something went wrong! See the message log for more information.',
+                                                level=Qgis.Critical,
+                                                duration=2)
+                self.iface.mainWindow().statusBar().showMessage("ERROR - {0}!".format(status))
+
+                QgsMessageLog.logMessage("ERROR - register_feature_finished(): {0}!".format("{0}".format(status)),
+                                         "agknow",
+                                         Qgis.Critical)
+
+        else:
+            QgsMessageLog.logMessage("register_feature_finished(): return of async was None!", "agknow",
+                                     Qgis.Warning)
+
+    @pyqtSlot(str)
+    def register_feature_error(self, ret):
+        """
+         Event handler for the error event of the register_feature_error worker.
+
+        :param ret: traceback of the error (string)
+        """
+        print("register_feature_error()")
+
+        # important! cleanup first before starting another thread
+        self.cleanup_threading()
+
+        if ret is not None:
+            # notify the user that something went wrong
+            self.iface.messageBar().pushMessage('Something went wrong! See the message log for more information.',
+                                                level=Qgis.Critical,
+                                                duration=2)
+            QgsMessageLog.logMessage("register_feature_error(): {0}".format(ret), "agknow",
+                                     Qgis.Warning)
+
+        else:
+            QgsMessageLog.logMessage("register_feature_error(): return of async was None!", "agknow",
+                                     Qgis.Warning)
