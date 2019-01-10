@@ -27,7 +27,7 @@ from qgis.PyQt.QtCore import pyqtSlot, pyqtSignal
 
 from qgis.core import QgsGeometry, QgsMessageLog, Qgis
 
-import requests
+import requests, json
 
 from . import agknow_utils
 
@@ -61,9 +61,9 @@ class Worker(QtCore.QObject):
         self.abort = False
         self.feature_count = 1
 
-        self.initial_project_epsg = 4326
-
         self.ssl_verify = True
+
+        self.initial_project_epsg = 4326
 
         # input data to be filled
         if "base_url" in kwargs:
@@ -90,6 +90,12 @@ class Worker(QtCore.QObject):
             self.data_source = kwargs["data_source"]
         if "img_format" in kwargs:
             self.img_format = kwargs["img_format"]
+
+        # for register feature
+        if "feature_to_register" in kwargs:
+            self.feature_to_register = kwargs["feature_to_register"]
+        if "geometry_epsg" in kwargs:
+            self.geometry_epsg = kwargs["geometry_epsg"]
 
     @pyqtSlot()
     def http_get(self):
@@ -247,9 +253,46 @@ class Worker(QtCore.QObject):
             #self.error.emit(e)
             self.finished.emit(None)
 
-            #print("Error getting images from url {0}".format(base_url))
-            #print(e.message)
+    @pyqtSlot()
+    def register_feature(self):
+        """
+         Register feature in the agknow API.
+        """
+        try:
+            QgsMessageLog.logMessage("AgknowWorker - Registering feature in ag|knowledge service..", "agknow", Qgis.Info)
 
+            self.status.emit("Registering feature..")
+
+            geom = QgsGeometry.fromWkt(self.feature_to_register["geometry"])
+
+            # check for validity here
+            if geom is None:
+                self.error.emit("Geometry is not valid!")
+
+                return
+
+            tgeom = self.utils.transform_geom(geom, src_epsg_code=self.geometry_epsg, dst_epsg_code=4326)
+
+            postdata = {"crop": self.feature_to_register["crop"],
+                        "name": self.feature_to_register["name"],
+                        "entity": self.feature_to_register["entity"],
+                        "planting": self.feature_to_register["planting"],
+                        "harvest": self.feature_to_register["harvest"],
+                        "geometry": tgeom.asWkt().upper()
+                        }
+
+            #print(postdata)
+
+            result = self.utils.sync_http_post(self.base_url, self.params, json.dumps(postdata))
+
+            self.finished.emit(result)
+
+        except Exception as e:
+
+            import traceback
+            self.error.emit(traceback.format_exc())
+            # don't return exceptions? QGIS crashed
+            #self.error.emit(e)
 
     @pyqtSlot()
     def calculate_progress(self):
