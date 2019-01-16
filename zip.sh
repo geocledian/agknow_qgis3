@@ -1,5 +1,5 @@
 PLUGINNAME="agknow_qgis"
-VERSION="0.7.2"
+VERSION="0.7.3"
 BUILDDIR="./build/"$PLUGINNAME
 ZIPDIR="./build"
 

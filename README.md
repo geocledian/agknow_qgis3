@@ -15,6 +15,8 @@ Please note that you will need a registered API key from geocledian.com to use t
 - Viewer for GeoTiff output of the API; the Javascript clients will not work here 
 
 ## Features:
+- Version 0.7.3:
+  - GUI enhancements
 - Version 0.7.2:
   - Parcel registering for selected feature from QGIS layer
 - Version 0.7.1:
