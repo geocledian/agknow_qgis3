@@ -15,13 +15,15 @@ Please note that you will need a registered API key from geocledian.com to use t
 - Viewer for GeoTiff output of the API; the Javascript clients will not work here 
 
 ## Features:
-
-- Download of all parcels for specified key -> QGIS feature layer
-- Download of all images (PNG or GeoTiff) -> QGIS raster layer
-- Grouping of layers according to their data sources/products/time stamps
-- Timeseries of images with timeslider widget
-- respects current SRS of project for downloading images/parcels from agknow API
-- anything happens in memory (vector and image data)
+- Version 0.7.2:
+  - Parcel registering for selected feature from QGIS layer
+- Version 0.7.1:
+  - Download of all parcels for specified key -> QGIS feature layer
+  - Download of all images (PNG or GeoTiff) -> QGIS raster layer
+  - Grouping of layers according to their data sources/products/time stamps
+  - Timeseries of images with timeslider widget
+  - respects current SRS of project for downloading images/parcels from agknow API
+  - anything happens in memory (vector and image data)
 
 ## Installation
 ### Linux
