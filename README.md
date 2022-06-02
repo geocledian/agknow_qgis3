@@ -33,5 +33,5 @@ clone git repo to %APPDATA%\QGIS\QGIS3\profiles\default\python\plugins, i.e.
 C:\Users\[USER]\AppData\Roaming\QGIS\QGIS3\profiles\default\python\plugins
 
 ## Support
-This plugin is provided as is and we accept no liability for the source code. In case of bugs or questions please contact us at geocledian.com. We are also happy to receive feedback. Unfortunately we can only offer very limited technical support, especially about integration in third party software.
+This plugin is provided as is and we accept no liability for the source code. In case of bugs or questions please contact [us](mailto:info@geocledian.com). We are also happy to receive feedback. Unfortunately we can only offer very limited technical support, especially about integration in third party software.
 
