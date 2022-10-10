@@ -27,7 +27,8 @@ import os
 
 from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal, Qt, QBasicTimer
-from qgis.PyQt.QtWidgets import QApplication
+from qgis.PyQt.QtGui import QIcon
+
 import qgis.utils
 
 from qgis.core import QgsProject, QgsMessageLog, Qgis
@@ -336,12 +337,12 @@ class AgknowDockWidgetTimeSlider(QtWidgets.QDockWidget, FORM_CLASS):
         """
          Handles the click event of the Button btnTimePlay.
         """
-        self.btnTimePlay.setText(" || ")
+        self.btnTimePlay.setIcon(QIcon(":/plugins/Agknow/font-awesome_4-7-0_pause_32_0_000000_none.png"))
         interval = 1000 #ms
 
         # stop timer if it is already active
         if self.timer.isActive():
-            self.btnTimePlay.setText(" > ")
+            self.btnTimePlay.setIcon(QIcon(":/plugins/Agknow/font-awesome_4-7-0_play_32_0_000000_none.png"))
             self.timer.stop()
             # reset timer
             self.step = 0

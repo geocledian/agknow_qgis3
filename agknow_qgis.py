@@ -235,6 +235,9 @@ class Agknow(object):
 
         print("** UNLOAD Agknow")
 
+        print("saving settings..")
+        self.save_settings()
+
         for action in self.actions:
             self.iface.removePluginMenu(
                 self.tr(u'&agknow for QGIS'),
@@ -362,9 +365,11 @@ class Agknow(object):
         """
          Saves Agknow plugin settings to the global QSettings object
         """
-        s = QSettings()
-        s.setValue("agknow_qgis/host_url", self.main_dockwidget.tbHostURL.text())
-        s.setValue("agknow_qgis/api_key", self.main_dockwidget.tbAPIKey.text())
+        if self.main_dockwidget:
+            s = QSettings()
+            s.setValue("agknow_qgis/host_url", self.main_dockwidget.tbHostURL.text())
+            s.setValue("agknow_qgis/api_key", self.main_dockwidget.tbAPIKey.text())
+
 
     def read_settings(self):
         """

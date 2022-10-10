@@ -12,8 +12,8 @@ about=This plugin allows the usage of the remote sensing API ag|knowledge from g
 tracker=https://github.com/sommergis/agknow_qgis3/issues
 repository=https://github.com/sommergis/agknow_qgis3
 
-changelog=0.7.3 GUI enhancements
-          0.7.2 Registering of any selected feature of a qgis vector layer in agk|knowledge REST Service
+changelog=0.7.3-beta GUI enhancements, store raster images in filessystem (storing as QGIS project possible, compatible to GDAL geoprocessing functions), API versions selectable
+          0.7.2 Registering of any selected feature of a qgis vector layer in ag|knowledge REST Service
           0.7.1 API Key as password input, tags added
 	      0.7 GUI Improvements
           0.5 First public release candidate

@@ -27,7 +27,7 @@ from builtins import next
 from builtins import str
 from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal, pyqtSlot, QVariant, Qt, QThread, QDate
-from qgis.PyQt.QtWidgets import QApplication
+from qgis.PyQt.QtWidgets import QApplication,QFileDialog
 import qgis.utils
 
 from qgis.core import QgsRasterLayer, QgsPoint, QgsVectorLayer, QgsGeometry,  \
@@ -40,8 +40,8 @@ from . import agknow_utils
 
 import json
 import os
-
 import datetime
+import gdal
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'agknow_qgis_dockwidget_base.ui'))
@@ -109,7 +109,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                          "image_format": "tif",
                          "connected": False}
 
-        self.utils = agknow_utils.AgknowUtils()
+        self.utils = agknow_utils.AgknowUtils("/agknow/api/v"+str(self.cbAPIVersion))
 
         self.product = "vitality"
         self.data_source = "sentinel2"
@@ -134,9 +134,13 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnRefresh.clicked.connect(self.btnRefresh_clicked)
         self.btnRegister.clicked.connect(self.btnRegister_clicked)
         self.cbPolygonLayer.currentIndexChanged.connect(self.cbPolygonLayer_currentIndexChanged)
+        self.btnSaveImgs.clicked.connect(self.btnSaveImgs_clicked)
 
         # reset register data
         self.clear_register_data()
+
+        # initialize plugin directory
+        self.plugin_dir = os.path.dirname(__file__)
 
 
     def get_current_project_epsg(self):
@@ -410,6 +414,51 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         else:
             self.connect()
 
+    def btnSaveImgs_clicked(self):
+        """
+         Handles the click event on btnSaveImgs
+        """
+        self.saveImages()
+
+
+    def saveImages(self):
+        """
+         Saves all images in the TOC of the agknow plugin to the selected directory on disk
+         and changes datasource from memory map to disk files.
+        """
+        directory = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
+
+        print("Selected directory: {0}".format(directory))
+
+        for key in self.rasters.keys():
+            rasterList = self.rasters[key]
+            #print(rasterList)
+
+            '''[{'product': 'vitality', 'statistics': {}, 'raster_id': 4604179, 'parcel_id': 132060,
+             'bounds': [[50.8391215495772, 7.77318200000001], [50.844141, 7.78393796519178]], 'source': 'sentinel2',
+             'date': '2019-01-20', 'png': '/parcels/132060/vitality/sentinel2/4604179.png',
+             'mmap_name': '/vsimem/213570cbc57a4204a9ea809210324c02'}, ...]'''
+
+            for raster in rasterList:
+                mmap_name = raster["mmap_name"]
+                date = raster["date"]
+                img_url = raster["png"]
+                out_path = os.path.join(directory, "cache", os.sep.join(img_url.lstrip('/').split('/')))
+
+                out_path = "{0}_{1}.{2}".format(out_path.strip(".png"), date, self.settings["image_format"])
+                out_path_subdir = os.path.dirname(out_path)
+
+                if not os.path.exists(out_path_subdir):
+                    os.makedirs(out_path_subdir, exist_ok=True)
+
+                print("Exporting to {0}..".format(out_path))
+                self.utils.exportGDALraster(mmap_name, out_path)
+
+                # TODO change mmap_name in layers datasource and in self.rasters dictionary
+
+
+
+
     def disconnect(self):
         """
          Disconnects from agknowledge REST API.
@@ -447,16 +496,19 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         api_key = self.tbAPIKey.text()
         host_url = self.tbHostURL.text()
-        base_url = host_url + "/agknow/api/v3"
+        api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
+        base_url = host_url + api_version
 
         # limited to 1000 at the moment
         # TODO: paging
-        limit = 1000
-        params = "/parcels/?key={0}&limit={1}".format(api_key, limit)
+        limit = 2500
+        offset = 0 #6000
+        params = "/parcels/?key={0}&limit={1}&offset={2}".format(api_key, limit, offset)
         # async with worker
         # set up progress bar
         self.init_progressBar(min_value=0, max_value=0)
-        kwargs = {"base_url": base_url, "params": params, "ssl_verify": True}
+        kwargs = {"base_url": base_url, "params": params, "ssl_verify": True, "api_version": api_version}
+        print(kwargs)
         self.startWorker(_runMethod="http_get",
                          _finishedEvtMethod="get_parcel_base_data_finished",
                          _errorEvtMethod="get_parcel_base_data_error",
@@ -553,11 +605,13 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         # async registering
         api_key = self.tbAPIKey.text()
         host_url = self.tbHostURL.text()
-        base_url = host_url + "/agknow/api/v3"
+        api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
+        base_url = host_url + api_version
         params = "/parcels/?key=" + api_key
 
         kwargs = {"base_url": base_url, "params": params, "feature_to_register": register_data,
-                  "ssl_verify": True, "api_key": api_key, "geometry_epsg": self.get_layer_epsg(self.get_current_register_layer())}
+                  "ssl_verify": True, "api_key": api_key, "geometry_epsg": self.get_layer_epsg(self.get_current_register_layer()),
+                  "api_version": api_version}
 
         self.startWorker(_runMethod="register_feature",
                          _finishedEvtMethod="register_feature_finished",
@@ -625,7 +679,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         api_key = self.tbAPIKey.text()
         host_url = self.tbHostURL.text()
-        base_url = host_url + "/agknow/api/v3"
+        api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
+        base_url = host_url + api_version
 
         self.update_parcel_images(api_key, base_url, [parcel_id])
 
@@ -845,7 +900,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 ## async with worker
                 api_key = self.tbAPIKey.text()
                 host_url = self.tbHostURL.text()
-                base_url = host_url + "/agknow/api/v3"
+                api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
+                base_url = host_url + api_version
 
                 self.init_progressBar()
                 #print("update_parcel_images() - return")
@@ -854,7 +910,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 kwargs = {"base_url": base_url, "product_id": self.product, "parcel_ids": parcel_ids,
                           "data_source": self.data_source, "ssl_verify": True, "api_key": api_key,
                           "img_format": self.settings["image_format"],
-                          "project_epsg": self.get_current_project_epsg()}
+                          "project_epsg": self.get_current_project_epsg(),
+                          "api_version": api_version}
 
                 self.startWorker(_runMethod="get_images",
                                  _finishedEvtMethod="get_images_finished",
@@ -894,7 +951,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         parcel_id = self.get_current_parcel_id()
         api_key = self.tbAPIKey.text()
         host_url = self.tbHostURL.text()
-        base_url = host_url + "/agknow/api/v3"
+        api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
+        base_url = host_url + api_version
 
         self.update_parcel_data(api_key, base_url, parcel_id)
 
@@ -978,7 +1036,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
     # should be called in GUI thread because it manipulates GUI elements
     def add_image_toc(self, mmap_name, lyrName, parcel_id, product_id, data_source):
         """
-         Adds the given image layer to the relevant group in the TOC.
+         Adds the given image layer to the relevant group in the TOC. Honors the in_memory flag of checkbox "chkBoxSaveImg"
 
         :param mmap_name: GDAL memory map name (string)
         :param lyrName: name of the layer (string)
@@ -988,7 +1046,31 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         """
         # layername must be string! integer does not work!
-        rlyr = QgsRasterLayer(mmap_name, str(lyrName))
+        if self.chkBoxSaveImg.isChecked():
+            # save to disk
+            # lyr_name = "{0}|{1}|{2}|{3}".format(r["product"], r["date"], r["raster_id"], r["source"])
+            product, date, raster_id, source = lyrName.split('|')
+            print(product, date, raster_id, source)
+
+            out_path = os.path.join(self.plugin_dir, "cache", "parcels", str(parcel_id), source, product, str(raster_id))
+
+            out_path = "{0}_{1}.{2}".format(out_path, date, self.settings["image_format"])
+
+            out_path_subdir = os.path.dirname(out_path)
+
+            if not os.path.exists(out_path_subdir):
+                os.makedirs(out_path_subdir, exist_ok=True)
+
+            print("Exporting to {0}..".format(out_path))
+            self.utils.exportGDALraster(mmap_name, out_path)
+
+            # memory clean up
+            gdal.Unlink(mmap_name)
+
+            rlyr = QgsRasterLayer(out_path, str(lyrName))
+
+        else:
+            rlyr = QgsRasterLayer(mmap_name, str(lyrName))
 
         # add to registry without showing up on TOC
         mapLyr = QgsProject.instance().addMapLayer(rlyr, addToLegend=False)
@@ -1234,8 +1316,9 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
             api_key = self.tbAPIKey.text()
             host_url = self.tbHostURL.text()
+            api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
 
-            base_url = host_url + "/agknow/api/v3"
+            base_url = host_url + api_version
             params = "/parcels/?key=" + api_key
 
             self.init_progressBar()
@@ -1252,7 +1335,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
             # async with worker
             kwargs = {"base_url": base_url, "ssl_verify": False, "parcel_ids": parcel_ids,
-                      "api_key": api_key, "parcelLyr": self.parcelLyr, "project_epsg": self.get_current_project_epsg()}
+                      "api_key": api_key, "parcelLyr": self.parcelLyr, "project_epsg": self.get_current_project_epsg(),
+                      "api_version": api_version}
 
             self.startWorker(_runMethod="get_parcels_detail_data",
                              _finishedEvtMethod="get_parcels_detail_data_finished",
@@ -1275,6 +1359,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         if ret is not None:
 
             result = json.loads(ret)
+            print(result)
             # check for correct api key
             if result["content"] == "key is not authorized":
                 self.iface.messageBar().clearWidgets()
@@ -1295,9 +1380,10 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                                                     level=Qgis.Warning, duration=2)
                 QgsMessageLog.logMessage("No parcels found for this API Key!", "agknow",
                                          Qgis.Warning)
+                # no parcels to show - but we may register new ones!
                 self.deactivate_connecting_state()
-                self.settings["connected"] = False
-                self.show_disconnected_state()
+                self.settings["connected"] = True
+                self.grBoxLayerSettings.setEnabled(self.settings["connected"])
 
                 return
             else:
@@ -1354,6 +1440,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnConnect.setEnabled(True)
         self.btnRefresh.setEnabled(self.settings["connected"])
         self.grBoxLayerSettings.setEnabled(self.settings["connected"])
+        self.cbAPIVersion.setEnabled(self.settings["connected"])
 
     def activate_connecting_state(self):
         """
@@ -1367,6 +1454,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnConnect.setEnabled(False)
         self.btnRefresh.setEnabled(False)
         self.grBoxLayerSettings.setEnabled(False)
+        self.cbAPIVersion.setEnabled(False)
 
     @pyqtSlot(str)
     def get_parcel_base_data_error(self, ret):
@@ -1451,7 +1539,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
                     api_key = self.tbAPIKey.text()
                     host_url = self.tbHostURL.text()
-                    base_url = host_url + "/agknow/api/v3"
+                    api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
+                    base_url = host_url + api_version
 
                     # should be 1 thread per Core at least to download the data in parallel
                     # but for the first draw just put all the work into another thread
