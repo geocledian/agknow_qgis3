@@ -1417,6 +1417,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnConnect.setText("Disconnect")
         self.tbHostURL.setEnabled(False)
         self.tbAPIKey.setEnabled(False)
+        self.cbAPIVersion.setEnabled(False)
 
     def show_disconnected_state(self):
         """
@@ -1427,6 +1428,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnConnect.setText("Connect")
         self.tbHostURL.setEnabled(True)
         self.tbAPIKey.setEnabled(True)
+        self.cbAPIVersion.setEnabled(True)
 
     def deactivate_connecting_state(self):
         """
@@ -1440,7 +1442,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnConnect.setEnabled(True)
         self.btnRefresh.setEnabled(self.settings["connected"])
         self.grBoxLayerSettings.setEnabled(self.settings["connected"])
-        self.cbAPIVersion.setEnabled(self.settings["connected"])
+        #self.cbAPIVersion.setEnabled(self.settings["connected"])
 
     def activate_connecting_state(self):
         """
@@ -1454,7 +1456,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnConnect.setEnabled(False)
         self.btnRefresh.setEnabled(False)
         self.grBoxLayerSettings.setEnabled(False)
-        self.cbAPIVersion.setEnabled(False)
+        #self.cbAPIVersion.setEnabled(False)
 
     @pyqtSlot(str)
     def get_parcel_base_data_error(self, ret):
