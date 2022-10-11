@@ -30,14 +30,30 @@
      <layout class="QHBoxLayout" name="horizontalLayout">
       <item>
        <widget class="QPushButton" name="btnTimePlay">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
         <property name="maximumSize">
          <size>
           <width>35</width>
-          <height>16777215</height>
+          <height>35</height>
          </size>
         </property>
         <property name="text">
-         <string> &gt;</string>
+         <string/>
+        </property>
+        <property name="icon">
+         <iconset resource="resources.qrc">
+          <normaloff>:/plugins/Agknow/font-awesome_4-7-0_play_32_0_000000_none.png</normaloff>:/plugins/Agknow/font-awesome_4-7-0_play_32_0_000000_none.png</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>20</width>
+          <height>12</height>
+         </size>
         </property>
         <property name="checkable">
          <bool>true</bool>
@@ -46,10 +62,16 @@
       </item>
       <item>
        <widget class="QSlider" name="sliderTime">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>30</height>
+         </size>
+        </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>25</height>
+          <height>35</height>
          </size>
         </property>
         <property name="maximum">
@@ -86,11 +108,21 @@
         <property name="maximumSize">
          <size>
           <width>35</width>
-          <height>16777215</height>
+          <height>35</height>
          </size>
         </property>
         <property name="text">
-         <string>|&lt;</string>
+         <string/>
+        </property>
+        <property name="icon">
+         <iconset resource="resources.qrc">
+          <normaloff>:/plugins/Agknow/foundation-icon-fonts_2015-02-16_previous_32_0_000000_none.png</normaloff>:/plugins/Agknow/foundation-icon-fonts_2015-02-16_previous_32_0_000000_none.png</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>20</width>
+          <height>12</height>
+         </size>
         </property>
        </widget>
       </item>
@@ -99,11 +131,21 @@
         <property name="maximumSize">
          <size>
           <width>35</width>
-          <height>16777215</height>
+          <height>35</height>
          </size>
         </property>
         <property name="text">
-         <string> &gt;|</string>
+         <string/>
+        </property>
+        <property name="icon">
+         <iconset resource="resources.qrc">
+          <normaloff>:/plugins/Agknow/foundation-icon-fonts_2015-02-16_next_32_0_000000_none.png</normaloff>:/plugins/Agknow/foundation-icon-fonts_2015-02-16_next_32_0_000000_none.png</iconset>
+        </property>
+        <property name="iconSize">
+         <size>
+          <width>20</width>
+          <height>12</height>
+         </size>
         </property>
        </widget>
       </item>
@@ -337,6 +379,5 @@
    </layout>
   </widget>
  </widget>
- <resources/>
  <connections/>
 </ui>

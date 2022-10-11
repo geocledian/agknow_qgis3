@@ -33,8 +33,8 @@ class AgknowUtils(object):
     """
      Utils class for the agknow plugin.
     """
-    def __init__(self):
-        pass
+    def __init__(self, api_version):
+        self.api_version = api_version
 
     def add_feature(self, geom, attributes, lyr, parcel_ids, parcel_ids_names=[]):
         """
@@ -80,16 +80,15 @@ class AgknowUtils(object):
         :return: transformed QgsGeometry object
         """
 
-        if isinstance(src_epsg_code, int) and isinstance(dst_epsg_code, int):
+        if isinstance(src_epsg_code, type(1)) and isinstance(dst_epsg_code, type(1)):
 
-            crsSrc = QgsCoordinateReferenceSystem(src_epsg_code)
-            crsDest = QgsCoordinateReferenceSystem(dst_epsg_code)
-            xform = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:{0}".format(src_epsg_code)),
-                                               QgsCoordinateReferenceSystem("EPSG:{0}".format(dst_epsg_code)),
+            crsSrc = QgsCoordinateReferenceSystem.fromEpsgId(src_epsg_code)
+            crsDest = QgsCoordinateReferenceSystem.fromEpsgId(dst_epsg_code)
+            xform = QgsCoordinateTransform(crsSrc,
+                                           crsDest,
                                            QgsProject.instance())
 
-            result = geom.transform(xform)
-            #print "Transformed? ", result
+            geom.transform(xform)
 
             return geom
 
@@ -123,13 +122,17 @@ class AgknowUtils(object):
                     return resp.content
             else:
                 print(resp.status_code)
+                print(resp.text)
+                # API v4 won't return HTTP 200 on error
+                if self.api_version.endswith("4"):
+                    return resp.text
 
         except requests.ConnectionError as e:
             print(e)
 
     def sync_http_post(self, base_url, params="", postdata="", ssl_verify=True):
         """
-         Performs a HTTP GET request with the given base_url and optional URL parameters. Honors also a global boolean
+         Performs a HTTP POST request with the given base_url and optional URL parameters. Honors also a global boolean
         SSL_VERIFY to override ssl_verify.
 
         :param base_url: URL for the HTTP GET request
@@ -138,10 +141,15 @@ class AgknowUtils(object):
         :param ssl_verify: shall the host be verified according to its TLS certificate or not; default is True
         """
         #url = "https://vs3.geocledian.com/agknow/api/v3/parcels"
+
+        # key as parameter
         url = base_url + params
 
+        print("sync_http_post()")
+        print("url: "+url)
         headers = {'Content-type': 'application/json'}
         try:
+            print(json.dumps(postdata))
             # timeout 10 seconds
             resp = requests.post(url, data=postdata, headers=headers, verify=ssl_verify, timeout=10.0)
 
@@ -149,6 +157,10 @@ class AgknowUtils(object):
                 return resp.text
             else:
                 print(resp.status_code)
+                print(resp.text)
+                # API v4 won't return HTTP 200 on error
+                if self.api_version.endswith("4"):
+                    return resp.text
 
         except ConnectionError as e:
             print(e)
@@ -169,16 +181,25 @@ class AgknowUtils(object):
 
         result = json.loads(self.sync_http_get(base_url, params))
 
-        data = result["content"][0]
-        geom_wkt = data["geometry"]
+        data = {}
         attributes = {}
+
+        if self.api_version.endswith("3"):
+            print(result)
+            print(result["content"])
+            data = result["content"][0]
+            geom_wkt = data["geometry"]
+
+        else:
+            data = result["content"]
+            geom_wkt = data["geometry"]
 
         for k in list(data.keys()):
             if k not in [u"geometry", u"centroid"]:
                 attributes[k] = data[k]
 
         attributes["apikey"] = api_key
-        attributes["host"] = base_url.lstrip('https://').rstrip(r'/agknow/api/v3')
+        attributes["host"] = base_url.lstrip('https://').rstrip(self.api_version)
 
         return attributes, geom_wkt
 
@@ -371,3 +392,30 @@ class AgknowUtils(object):
             #print("transformed raster: {0}".format(mmap_name))
 
         return mmap_name
+
+    def exportGDALraster(self, mmap_name, out_path):
+        """
+         Exports a memory map GDAL raster to GeoTiff on disk.
+
+        :param mmap_name:
+        :param out_path:
+        """
+
+        in_dataset = gdal.Open(mmap_name)
+
+        # Write output
+        if out_path.upper().endswith(".TIF"):
+            driver = gdal.GetDriverByName('Gtiff')
+            # Output to new format
+            out_dataset = driver.CreateCopy(out_path, in_dataset, strict=0,
+                           options=["TILED=YES", "COMPRESS=DEFLATE"])
+
+        elif out_path.upper().endswith(".PNG"):
+            driver = gdal.GetDriverByName('PNG')
+            # Output to new format
+            out_dataset = driver.CreateCopy(out_path, in_dataset, strict=0,
+                                            options=[])
+
+        # Properly close the datasets to flush to disk
+        out_dataset = None
+        in_dataset = None

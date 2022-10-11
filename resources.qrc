@@ -1,7 +1,12 @@
 <RCC>
-    <qresource prefix="/plugins/Agknow" >
-        <file>agknow_project_logo.png</file>
-        <file>agknow_project_logo.jpg</file>
-        <file>geocledian_logo_sm.png</file>
-    </qresource>
+  <qresource prefix="/plugins/Agknow">
+    <file>font-awesome_4-7-0_pause_32_0_000000_none.png</file>
+    <file>font-awesome_4-7-0_stop_32_0_000000_none.png</file>
+    <file>foundation-icon-fonts_2015-02-16_next_32_0_000000_none.png</file>
+    <file>foundation-icon-fonts_2015-02-16_previous_32_0_000000_none.png</file>
+    <file>agknow_project_logo.png</file>
+    <file>agknow_project_logo.jpg</file>
+    <file>geocledian_logo_sm.png</file>
+    <file>font-awesome_4-7-0_play_32_0_000000_none.png</file>
+  </qresource>
 </RCC>

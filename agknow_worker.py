@@ -54,7 +54,9 @@ class Worker(QtCore.QObject):
 
         QtCore.QObject.__init__(self)
 
-        self.utils = agknow_utils.AgknowUtils()
+        self.api_version = kwargs.get("api_version")
+
+        self.utils = agknow_utils.AgknowUtils(self.api_version)
 
         self.processed = 0
         self.percentage = 0
@@ -116,6 +118,7 @@ class Worker(QtCore.QObject):
                 self.finished.emit(resp.text)
             else:
                 self.error.emit(str(resp.status_code))
+                self.error.emit(resp.text)
                 self.finished.emit(None)
 
             self.status.emit('GET Request processed!')
@@ -281,7 +284,7 @@ class Worker(QtCore.QObject):
                         "geometry": tgeom.asWkt().upper()
                         }
 
-            #print(postdata)
+            self.status.emit(json.dumps(postdata))
 
             result = self.utils.sync_http_post(self.base_url, self.params, json.dumps(postdata))
 
