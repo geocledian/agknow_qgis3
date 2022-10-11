@@ -57,3 +57,6 @@ the [Temporal Profile plugin](https://plugins.qgis.org/plugins/temporalprofileto
 - is the stack added to the layer registry of the temporal profile plugin?
 - is the QGIS project's CRS different than the stack layer's CRS? There is a known bug in this plugin (https://github.com/DHI-GRAS/qgis-temporal-profile/issues/20).
   To work around this issue just switch the QGIS project's CRS to the raster layer's CRS.
+  
+  ## Support
+This plugin is provided as is and we accept no liability for the source code. In case of bugs or questions please contact [us](mailto:info@geocledian.com). We are also happy to receive feedback. Unfortunately we can only offer very limited technical support, especially about integration in third party software.
