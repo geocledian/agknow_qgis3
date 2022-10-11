@@ -284,7 +284,7 @@ class Worker(QtCore.QObject):
                         "geometry": tgeom.asWkt().upper()
                         }
 
-            #print(postdata)
+            self.status.emit(json.dumps(postdata))
 
             result = self.utils.sync_http_post(self.base_url, self.params, json.dumps(postdata))
 

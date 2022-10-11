@@ -80,16 +80,15 @@ class AgknowUtils(object):
         :return: transformed QgsGeometry object
         """
 
-        if isinstance(src_epsg_code, int) and isinstance(dst_epsg_code, int):
+        if isinstance(src_epsg_code, type(1)) and isinstance(dst_epsg_code, type(1)):
 
-            crsSrc = QgsCoordinateReferenceSystem(src_epsg_code)
-            crsDest = QgsCoordinateReferenceSystem(dst_epsg_code)
-            xform = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:{0}".format(src_epsg_code)),
-                                               QgsCoordinateReferenceSystem("EPSG:{0}".format(dst_epsg_code)),
+            crsSrc = QgsCoordinateReferenceSystem.fromEpsgId(src_epsg_code)
+            crsDest = QgsCoordinateReferenceSystem.fromEpsgId(dst_epsg_code)
+            xform = QgsCoordinateTransform(crsSrc,
+                                           crsDest,
                                            QgsProject.instance())
 
-            result = geom.transform(xform)
-            #print "Transformed? ", result
+            geom.transform(xform)
 
             return geom
 
@@ -123,13 +122,17 @@ class AgknowUtils(object):
                     return resp.content
             else:
                 print(resp.status_code)
+                print(resp.text)
+                # API v4 won't return HTTP 200 on error
+                if self.api_version.endswith("4"):
+                    return resp.text
 
         except requests.ConnectionError as e:
             print(e)
 
     def sync_http_post(self, base_url, params="", postdata="", ssl_verify=True):
         """
-         Performs a HTTP GET request with the given base_url and optional URL parameters. Honors also a global boolean
+         Performs a HTTP POST request with the given base_url and optional URL parameters. Honors also a global boolean
         SSL_VERIFY to override ssl_verify.
 
         :param base_url: URL for the HTTP GET request
@@ -138,10 +141,15 @@ class AgknowUtils(object):
         :param ssl_verify: shall the host be verified according to its TLS certificate or not; default is True
         """
         #url = "https://vs3.geocledian.com/agknow/api/v3/parcels"
+
+        # key as parameter
         url = base_url + params
 
+        print("sync_http_post()")
+        print("url: "+url)
         headers = {'Content-type': 'application/json'}
         try:
+            print(json.dumps(postdata))
             # timeout 10 seconds
             resp = requests.post(url, data=postdata, headers=headers, verify=ssl_verify, timeout=10.0)
 
@@ -149,6 +157,10 @@ class AgknowUtils(object):
                 return resp.text
             else:
                 print(resp.status_code)
+                print(resp.text)
+                # API v4 won't return HTTP 200 on error
+                if self.api_version.endswith("4"):
+                    return resp.text
 
         except ConnectionError as e:
             print(e)
@@ -173,6 +185,8 @@ class AgknowUtils(object):
         attributes = {}
 
         if self.api_version.endswith("3"):
+            print(result)
+            print(result["content"])
             data = result["content"][0]
             geom_wkt = data["geometry"]
 

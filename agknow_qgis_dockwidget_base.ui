@@ -517,10 +517,10 @@ QWidget::tab::hover
                    <item>
                     <widget class="QPushButton" name="btnSaveImgs">
                      <property name="enabled">
-                      <bool>false</bool>
+                      <bool>true</bool>
                      </property>
                      <property name="text">
-                      <string>Save images to disk</string>
+                      <string>Export images</string>
                      </property>
                     </widget>
                    </item>

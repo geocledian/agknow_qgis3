@@ -29,6 +29,7 @@ from qgis.PyQt import QtWidgets, uic
 from qgis.PyQt.QtCore import pyqtSignal, pyqtSlot, QVariant, Qt, QThread, QDate
 from qgis.PyQt.QtWidgets import QApplication,QFileDialog
 import qgis.utils
+from qgis._core import QgsDataProvider
 
 from qgis.core import QgsRasterLayer, QgsPoint, QgsVectorLayer, QgsGeometry,  \
     QgsFields, QgsField, QgsFeatureRequest, QgsExpression, QgsProject, Qgis, QgsMessageLog, QgsLayerTreeLayer, \
@@ -109,7 +110,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                          "image_format": "tif",
                          "connected": False}
 
-        self.utils = agknow_utils.AgknowUtils("/agknow/api/v"+str(self.cbAPIVersion))
+        self.api_version = "/agknow/api/v" + str(self.cbAPIVersion.currentText())
+        self.utils = agknow_utils.AgknowUtils(self.api_version)
 
         self.product = "vitality"
         self.data_source = "sentinel2"
@@ -135,6 +137,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         self.btnRegister.clicked.connect(self.btnRegister_clicked)
         self.cbPolygonLayer.currentIndexChanged.connect(self.cbPolygonLayer_currentIndexChanged)
         self.btnSaveImgs.clicked.connect(self.btnSaveImgs_clicked)
+        self.cbAPIVersion.currentIndexChanged.connect(self.cbAPIVersion_currentIndexChanged)
 
         # reset register data
         self.clear_register_data()
@@ -209,10 +212,10 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         try:
             if feature["seeding"] is not None:
                 # for text field with date in it
-                if isinstance(feature["seeding"], basestring):
+                if type(feature["seeding"]) is type("test"):
                     # for text field (QString) in ISO Format (YYYY-MM-DD)
                     d = QDate.fromString(feature["seeding"], Qt.ISODate)
-                elif isinstance(feature["seeding"], QDate):
+                elif type(feature["seeding"]) is type(QDate):
                     # for date field (QDate)
                     d = feature["seeding"]
 
@@ -226,10 +229,10 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         try:
             if feature["planting"] is not None:
                 # for text field with date in it
-                if isinstance(feature["planting"], basestring):
+                if type(feature["planting"]) is type("test"):
                     # for text field (QString) in ISO Format (YYYY-MM-DD)
                     d = QDate.fromString(feature["planting"], Qt.ISODate)
-                elif isinstance(feature["planting"], QDate):
+                elif type(feature["planting"]) is type(QDate):
                     # for date field (QDate)
                     d = feature["planting"]
 
@@ -245,10 +248,10 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         try:
             if feature["cutting"] is not None:
                 # for text field with date in it
-                if isinstance(feature["cutting"], basestring):
+                if type(feature["cutting"]) is type("test"):
                     # for text field (QString) in ISO Format (YYYY-MM-DD)
                     d = QDate.fromString(feature["cutting"], Qt.ISODate)
-                elif isinstance(feature["cutting"], QDate):
+                elif type(feature["cutting"]) is type(QDate):
                     # for date field (QDate)
                     d = feature["cutting"]
 
@@ -263,10 +266,10 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         try:
             if feature["harvest"] is not None:
                 # for text field with date in it
-                if isinstance(feature["harvest"], basestring):
+                if type(feature["harvest"]) is type("test"):
                     # for text field (QString) in ISO Format (YYYY-MM-DD)
                     d = QDate.fromString(feature["harvest"], Qt.ISODate)
-                elif isinstance(feature["harvest"], QDate):
+                elif type(feature["harvest"]) is type(QDate):
                     # for date field (QDate)
                     d = feature["harvest"]
 
@@ -418,12 +421,12 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         """
          Handles the click event on btnSaveImgs
         """
-        self.saveImages()
+        self.exportImages()
 
 
-    def saveImages(self):
+    def exportImages(self):
         """
-         Saves all images in the TOC of the agknow plugin to the selected directory on disk
+         Exports all images in the TOC of the agknow plugin to the selected directory on disk
          and changes datasource from memory map to disk files.
         """
         directory = str(QFileDialog.getExistingDirectory(self, "Select Directory"))
@@ -439,11 +442,20 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
              'date': '2019-01-20', 'png': '/parcels/132060/vitality/sentinel2/4604179.png',
              'mmap_name': '/vsimem/213570cbc57a4204a9ea809210324c02'}, ...]'''
 
+            new_rasters = []
             for raster in rasterList:
+                # mmap_name may also be a persistent path on disk!
                 mmap_name = raster["mmap_name"]
+                print(mmap_name)
+
+                raster_id = raster["raster_id"]
                 date = raster["date"]
                 img_url = raster["png"]
-                out_path = os.path.join(directory, "cache", os.sep.join(img_url.lstrip('/').split('/')))
+                parcel_id = raster["parcel_id"]
+                product_id = raster["product"]
+                data_source = raster["source"]
+
+                out_path = os.path.join(directory, f"agknow-{datetime.date.today()}", os.sep.join(img_url.lstrip('/').split('/')))
 
                 out_path = "{0}_{1}.{2}".format(out_path.strip(".png"), date, self.settings["image_format"])
                 out_path_subdir = os.path.dirname(out_path)
@@ -454,9 +466,32 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 print("Exporting to {0}..".format(out_path))
                 self.utils.exportGDALraster(mmap_name, out_path)
 
-                # TODO change mmap_name in layers datasource and in self.rasters dictionary
+                # change mmap_name in layers datasource
 
+                if mmap_name.startswith("/vsimem"):
+                    # memory clean up
+                    gdal.Unlink(mmap_name)
 
+                # find in TOC
+                root = QgsProject.instance().layerTreeRoot()
+
+                product_group = root.findGroup("parcel id: {0}".format(parcel_id)).findGroup(
+                    product_id + " ").findGroup(
+                    data_source)
+
+                # get layer of this group
+                for child in product_group.children():
+                    # layername: vitality|2021-09-25|8315|sentinel2
+                    if child.name() == f"{product_id}|{date}|{raster_id}|{data_source}":
+                        rLry = child.layer()
+                        rLry.setDataSource(out_path, child.name(), "gdal", QgsDataProvider.ProviderOptions())
+
+                # update mmap_name with new path
+                raster["mmap_name"] = out_path
+                new_rasters.append(raster)
+
+            # change mmap_name in self.rasters dictionary
+            self.rasters[key] = new_rasters
 
 
     def disconnect(self):
@@ -496,8 +531,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         api_key = self.tbAPIKey.text()
         host_url = self.tbHostURL.text()
-        api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
-        base_url = host_url + api_version
+        
+        base_url = host_url + self.api_version
 
         # limited to 1000 at the moment
         # TODO: paging
@@ -507,7 +542,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         # async with worker
         # set up progress bar
         self.init_progressBar(min_value=0, max_value=0)
-        kwargs = {"base_url": base_url, "params": params, "ssl_verify": True, "api_version": api_version}
+        kwargs = {"base_url": base_url, "params": params, "ssl_verify": True, "api_version": self.api_version}
         print(kwargs)
         self.startWorker(_runMethod="http_get",
                          _finishedEvtMethod="get_parcel_base_data_finished",
@@ -582,6 +617,14 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 self.lblRegister.setVisible(True)
                 self.btnRegister.setEnabled(False)
 
+    def cbAPIVersion_currentIndexChanged(self):
+        """
+         Handles the currentIndexChanged event of the cbAPIVersion combobox.
+        """
+        self.api_version = "/agknow/api/v" + str(self.cbAPIVersion.currentText())
+        self.utils = agknow_utils.AgknowUtils(self.api_version)
+
+
     def clear_register_data(self):
         """
          Clears all data from the GUI elements and internal storage of register_data.
@@ -605,13 +648,13 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         # async registering
         api_key = self.tbAPIKey.text()
         host_url = self.tbHostURL.text()
-        api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
-        base_url = host_url + api_version
+        
+        base_url = host_url + self.api_version
         params = "/parcels/?key=" + api_key
 
         kwargs = {"base_url": base_url, "params": params, "feature_to_register": register_data,
                   "ssl_verify": True, "api_key": api_key, "geometry_epsg": self.get_layer_epsg(self.get_current_register_layer()),
-                  "api_version": api_version}
+                  "api_version": self.api_version}
 
         self.startWorker(_runMethod="register_feature",
                          _finishedEvtMethod="register_feature_finished",
@@ -679,8 +722,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         api_key = self.tbAPIKey.text()
         host_url = self.tbHostURL.text()
-        api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
-        base_url = host_url + api_version
+        
+        base_url = host_url + self.api_version
 
         self.update_parcel_images(api_key, base_url, [parcel_id])
 
@@ -802,6 +845,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         # wait cursor
         QApplication.setOverrideCursor(Qt.WaitCursor)
 
+        print("update_parcel_data()")
+
         try:
             # download parcel attribute data if not present
             if parcel_id not in self.parcel_ids:
@@ -900,8 +945,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 ## async with worker
                 api_key = self.tbAPIKey.text()
                 host_url = self.tbHostURL.text()
-                api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
-                base_url = host_url + api_version
+                
+                base_url = host_url + self.api_version
 
                 self.init_progressBar()
                 #print("update_parcel_images() - return")
@@ -911,7 +956,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                           "data_source": self.data_source, "ssl_verify": True, "api_key": api_key,
                           "img_format": self.settings["image_format"],
                           "project_epsg": self.get_current_project_epsg(),
-                          "api_version": api_version}
+                          "api_version": self.api_version}
 
                 self.startWorker(_runMethod="get_images",
                                  _finishedEvtMethod="get_images_finished",
@@ -951,8 +996,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
         parcel_id = self.get_current_parcel_id()
         api_key = self.tbAPIKey.text()
         host_url = self.tbHostURL.text()
-        api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
-        base_url = host_url + api_version
+        
+        base_url = host_url + self.api_version
 
         self.update_parcel_data(api_key, base_url, parcel_id)
 
@@ -1083,6 +1128,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         # add map layer to this group
         product_group.addLayer(mapLyr)
+
+        return rlyr.source()
 
     def init_group_layers(self, parcel_id, product_id):
         """
@@ -1316,9 +1363,9 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
             api_key = self.tbAPIKey.text()
             host_url = self.tbHostURL.text()
-            api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
+            
 
-            base_url = host_url + api_version
+            base_url = host_url + self.api_version
             params = "/parcels/?key=" + api_key
 
             self.init_progressBar()
@@ -1336,7 +1383,7 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
             # async with worker
             kwargs = {"base_url": base_url, "ssl_verify": False, "parcel_ids": parcel_ids,
                       "api_key": api_key, "parcelLyr": self.parcelLyr, "project_epsg": self.get_current_project_epsg(),
-                      "api_version": api_version}
+                      "api_version": self.api_version}
 
             self.startWorker(_runMethod="get_parcels_detail_data",
                              _finishedEvtMethod="get_parcels_detail_data_finished",
@@ -1541,8 +1588,8 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
                     api_key = self.tbAPIKey.text()
                     host_url = self.tbHostURL.text()
-                    api_version = "/agknow/api/v"+str(self.cbAPIVersion.currentText())
-                    base_url = host_url + api_version
+                    
+                    base_url = host_url + self.api_version
 
                     # should be 1 thread per Core at least to download the data in parallel
                     # but for the first draw just put all the work into another thread
@@ -1639,18 +1686,28 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                 self.rasters[raster_group_id] = rasters
 
                 # add all rasters to the GUI
+                new_rasters = []
                 for r in rasters:
                     try:
                         # with date and raster ID as layername
                         lyr_name = "{0}|{1}|{2}|{3}".format(r["product"], r["date"], r["raster_id"], r["source"])
 
-                        self.add_image_toc(r["mmap_name"], lyr_name, r["parcel_id"],
+                        file_path = self.add_image_toc(r["mmap_name"], lyr_name, r["parcel_id"],
                                            r["product"], r["source"])
+
+                        # update raster dictionary's path
+                        r["mmap_name"] = file_path
+                        new_rasters.append(r)
+
                     except Exception as e:
                         QgsMessageLog.logMessage("get_images_finished(): Error adding image to TOC", "agknow",
                                                  Qgis.Warning)
                         QgsMessageLog.logMessage("{0}".format(e), "agknow",
                                                  Qgis.Warning)
+
+                # save updated rasters
+                rasters = new_rasters
+                self.rasters[raster_group_id] = rasters
 
                 # notify change on slot
                 self.imagesReloaded.emit(rasters)
@@ -1716,17 +1773,34 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         if ret is not None:
 
-            # Success:
+            # Success APIv3:
             # {"errors": "", "messages": {"status": "Successfully created parcel"}, "id": 19}
             # Error on wrong geometry
             # {u'errors': u'Could not read geometry from WKT', u'id': None}
 
+            # Success APIv4:
+            # {"content": {"parcel_id": 12101, "crop": "test", "name": "test", "entity": "", "area": 8784.87509489059,
+            #              "planting": "2021-03-01", "harvest": "2021-04-01",
+            #              "geometry": "MULTIPOLYGON(((12.128731 48.57026,12.129391 48.570464,12.130901 48.569232,12.130137 48.569124,12.128731 48.57026)))",
+            #              "promotion": false, "userdata": null},
+            #  "messages": {"entity": "Warning: no entity name provided, left empty",
+            #               "status": "Successfully created parcel"}}
+
             ret_dict = json.loads(ret)
+            
+            success = False
+            if self.api_version.endswith("3"):
+                if len(ret_dict["errors"]) == 0:
+                    success = True
+                    new_id = ret_dict["id"]
+            elif self.api_version.endswith("4"):
+                if "content" in ret_dict:
+                    success = True
+                    new_id = ret_dict["content"]["parcel_id"]
 
-            if len(ret_dict["errors"]) == 0:
-
+            if success is True:
                 status = ret_dict["messages"]["status"]
-                new_id = ret_dict["id"]
+
                 self.iface.messageBar().clearWidgets()
                 self.iface.messageBar().pushMessage('Successfully registered feature with ID {0}'.format(new_id),
                                                 level=Qgis.Success,
@@ -1756,11 +1830,19 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
                     self.parcel_id_to_set = new_id
 
             else:
-                status = ret_dict["errors"]
+                # error API v4 sample:
+                # {"error":"Usage status error","detail":"maximum amount of hectares registered"}
+                status = ""
+                if self.api_version.endswith("4"):
+                    status = f"{ret_dict['error']}: {ret_dict['detail']}"
+
+                if self.api_version.endswith("3"):
+                    status = ret_dict["errors"]
+
                 self.iface.messageBar().clearWidgets()
-                self.iface.messageBar().pushMessage('Something went wrong! See the message log for more information.',
+                self.iface.messageBar().pushMessage('Something went wrong! {0} See the message log for more information.'.format(status),
                                                 level=Qgis.Critical,
-                                                duration=2)
+                                                duration=5)
                 self.iface.mainWindow().statusBar().showMessage("ERROR - {0}!".format(status))
 
                 QgsMessageLog.logMessage("ERROR - register_feature_finished(): {0}!".format("{0}".format(status)),
@@ -1785,9 +1867,11 @@ class AgknowDockWidget(QtWidgets.QDockWidget, FORM_CLASS):
 
         if ret is not None:
             # notify the user that something went wrong
-            self.iface.messageBar().pushMessage('Something went wrong! See the message log for more information.',
-                                                level=Qgis.Critical,
-                                                duration=2)
+            self.iface.messageBar().pushMessage(
+                'Something went wrong! {0} See the message log for more information.',
+                level=Qgis.Critical,
+                duration=5)
+
             QgsMessageLog.logMessage("register_feature_error(): {0}".format(ret), "agknow",
                                      Qgis.Warning)
 
