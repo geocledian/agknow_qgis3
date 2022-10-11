@@ -26,7 +26,7 @@ from builtins import object
 from qgis.core import QgsGeometry, QgsFeature, QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject
 import requests, json
 
-import gdal, osr
+from osgeo import gdal, osr
 from uuid import uuid4
 
 class AgknowUtils(object):
