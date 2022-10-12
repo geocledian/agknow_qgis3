@@ -3,7 +3,7 @@
 name=agknow for QGIS
 qgisMinimumVersion=3.4
 description=Plugin for using the ag|knowledge REST API from <a href="https://geocledian.com">geo|cledian</a>
-version=0.7.4
+version=0.7.5
 author=geo|cledian.com
 email=jsommer@geocledian.com
 
@@ -12,7 +12,7 @@ about=This plugin allows the usage of the remote sensing API ag|knowledge from g
 tracker=https://github.com/sommergis/agknow_qgis3/issues
 repository=https://github.com/sommergis/agknow_qgis3
 
-changelog=0.7.4 fixed importing of GDAL
+changelog=0.7.5 fixed importing of GDAL
           0.7.3 GUI enhancements, store raster images in file system (storing as QGIS project possible, compatible to GDAL geoprocessing functions), API versions selectable
           0.7.2 Registering of any selected feature of a qgis vector layer in ag|knowledge REST Service
           0.7.1 API Key as password input, tags added

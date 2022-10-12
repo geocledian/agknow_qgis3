@@ -42,7 +42,7 @@ from . import agknow_utils
 import json
 import os
 import datetime
-import gdal
+from osgeo import gdal
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(
     os.path.dirname(__file__), 'agknow_qgis_dockwidget_base.ui'))

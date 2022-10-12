@@ -15,8 +15,8 @@ Please note that you will need a registered API key from geocledian.com to use t
 - Viewer for GeoTiff output of the API; the Javascript clients will not work here 
 
 ## Change log:
-- Version 0.7.4:
-  - 0.7.4 fixed importing of GDAL
+- Version 0.7.5:
+  - fixed importing of GDAL
 - Version 0.7.3:
   - GUI enhancements
   - store raster images in file system 
